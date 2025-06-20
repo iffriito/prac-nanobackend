@@ -1,21 +1,30 @@
 package main
 
 import (
+	"database/sql"
+	"errors"
+	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"time"
 
 	"github.com/go-sql-driver/mysql"
 	"github.com/jmoiron/sqlx"
+	"github.com/labstack/echo/v4"
 )
 
 type City struct {
-	ID          int    `json:"ID,omitempty" db:"ID"`
-	Name        string `json:"name,omitempty" db:"Name"`
+	ID          int    `json:"id,omitempty"  db:"ID"`
+	Name        string `json:"name,omitempty"  db:"Name"`
 	CountryCode string `json:"countryCode,omitempty"  db:"CountryCode"`
 	District    string `json:"district,omitempty"  db:"District"`
 	Population  int    `json:"population,omitempty"  db:"Population"`
 }
+
+var (
+	db *sqlx.DB
+)
 
 func main() {
 	jst, err := time.LoadLocation("Asia/Tokyo")
@@ -34,22 +43,34 @@ func main() {
 		Loc:       jst,
 	}
 
-	db, err := sqlx.Open("mysql", conf.FormatDSN())
+	_db, err := sqlx.Open("mysql", conf.FormatDSN())
 
 	if err != nil {
 		log.Fatal(err)
 	}
-
 	log.Println("connected")
+	db = _db
 
-	var cities []City
-	err = db.Select(&cities, "SELECT * FROM city WHERE CountryCode = 'JPN'") //?を使わない場合、第3引数以降は不要
+	e := echo.New()
+
+	e.GET("/cities/:cityName", getCityInfoHandler)
+
+	e.Start(":8080")
+}
+
+func getCityInfoHandler(c echo.Context) error {
+	cityName := c.Param("cityName")
+	log.Println(cityName)
+
+	var city City
+	err := db.Get(&city, "SELECT * FROM city WHERE Name=?", cityName)
+	if errors.Is(err, sql.ErrNoRows) {
+		return echo.NewHTTPError(http.StatusNotFound, fmt.Sprintf("No such city Name = %s", cityName))
+	}
 	if err != nil {
-		log.Fatal(err)
+		log.Printf("DB Error: %s", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "internal server error")
 	}
 
-	log.Println("日本の都市一覧")
-	for _, city := range cities {
-		log.Printf("都市名: %s, 人口: %d\n", city.Name, city.Population)
-	}
+	return c.JSON(http.StatusOK, city)
 }
