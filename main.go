@@ -1,8 +1,6 @@
 package main
 
 import (
-	"database/sql"
-	"errors"
 	"log"
 	"os"
 	"time"
@@ -44,19 +42,14 @@ func main() {
 
 	log.Println("connected")
 
-	cityName := os.Args[1] 
-
-	var city City
-
-	err = db.Get(&city, "SELECT * FROM city WHERE Name = ?", cityName) 
-	if errors.Is(err, sql.ErrNoRows) {
-
-		log.Printf("no such city Name = '%s'\n", cityName) 
-		return
-	}
+	var cities []City
+	err = db.Select(&cities, "SELECT * FROM city WHERE CountryCode = 'JPN'") //?を使わない場合、第3引数以降は不要
 	if err != nil {
-		log.Fatalf("DB Error: %s\n", err)
+		log.Fatal(err)
 	}
 
-	log.Printf("%sの人口は%d人です\n", city.Name, city.Population)
+	log.Println("日本の都市一覧")
+	for _, city := range cities {
+		log.Printf("都市名: %s, 人口: %d\n", city.Name, city.Population)
+	}
 }
